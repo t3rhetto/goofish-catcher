@@ -15,7 +15,32 @@
 
 AI 不会自动下单或联系卖家；分析依据是实际取得的商品资料，参考价不是成交价。接口失败时会提示错误，不会自动改为关键词模式。
 
-## 快速开始：从源码部署
+## 快速开始：使用已发布镜像（推荐）
+
+需要 Docker 与 Docker Compose v2，可运行 **Linux AMD64** 容器。截至 **2026-10-15**，`1.3.0`、`1.4.0` 镜像已公开发布，`latest` 对应 `1.4.0`。
+
+新安装时创建一个独立目录，下载已填好镜像地址的 Compose 文件：
+
+```sh
+mkdir goofish-catcher-deploy
+cd goofish-catcher-deploy
+curl --fail --location --output compose.yaml \
+  https://github.com/t3rhetto/goofish-catcher/releases/download/v1.4.0/compose.yaml
+docker compose up -d
+```
+
+该安装方式使用 Docker 命名卷 `xianyu-data` 保存账号、配置和商品数据。**已有部署请保留原 Compose 文件及数据映射，不要用新安装文件直接覆盖**；升级方法见 [部署说明](docs/DEPLOYMENT.md)。
+
+## 版本下载
+
+| 版本 | 发布说明 | 完整源码 | 镜像部署文件 |
+| --- | --- | --- | --- |
+| v1.4.0（最新） | [Release](https://github.com/t3rhetto/goofish-catcher/releases/tag/v1.4.0) | [goofish-catcher-source-1.4.0.zip](https://github.com/t3rhetto/goofish-catcher/releases/download/v1.4.0/goofish-catcher-source-1.4.0.zip) | [compose.yaml](https://github.com/t3rhetto/goofish-catcher/releases/download/v1.4.0/compose.yaml) |
+| v1.3.0 | [Release](https://github.com/t3rhetto/goofish-catcher/releases/tag/v1.3.0) | [goofish-catcher-source-1.3.0.zip](https://github.com/t3rhetto/goofish-catcher/releases/download/v1.3.0/goofish-catcher-source-1.3.0.zip) | [compose.yaml](https://github.com/t3rhetto/goofish-catcher/releases/download/v1.3.0/compose.yaml) |
+
+镜像地址为 `ghcr.io/t3rhetto/goofish-catcher:1.4.0` 和 `:1.3.0`；后续版本是否可用，请查看对应 Release 的发布结果。
+
+## 从源码部署
 
 需要 Git、Docker 与 Docker Compose v2；当前发布目标为 **Linux AMD64**。其他架构需提供 AMD64 模拟环境。以下在服务器终端执行：
 
@@ -32,6 +57,8 @@ docker compose up -d --build
 
 初始化命令使用镜像内的实际用户为 `data/` 设置写入权限，避免 Linux 首次挂载目录由 root 创建导致启动失败；用于新安装的空目录即可。应用和容器内路径仍沿用 `xianyu-watch` 名称。
 
+## 访问与首次设置
+
 同一台电脑部署时，打开 [http://127.0.0.1:8818](http://127.0.0.1:8818)。远程服务器部署时，在自己的电脑另开终端建立转发：
 
 ```sh
@@ -40,7 +67,7 @@ ssh -N -L 18818:127.0.0.1:8818 用户名@服务器地址
 
 保持此连接，打开 [http://127.0.0.1:18818](http://127.0.0.1:18818)。首次进入设置管理密码（8～128 字符），再扫码登录闲鱼；使用 AI 时填写自己的接口地址、模型和密钥。
 
-镜像发布工作流已提供。**GHCR 镜像是否可直接拉取，以对应 Release 的成功发布结果为准**；源码构建不依赖预先发布的项目镜像。完整配置和镜像部署方式见 [部署说明](docs/DEPLOYMENT.md)。
+完整配置、数据备份和升级方式见 [部署说明](docs/DEPLOYMENT.md)。
 
 ## 筛选设置与限制
 
@@ -58,12 +85,14 @@ ssh -N -L 18818:127.0.0.1:8818 用户名@服务器地址
 
 ## 数据与版本
 
-- `compose.yaml` 将当前目录 `data/` 挂载到容器 `/data`，保存账号会话、管理配置、商品记录、收藏、主图缓存。升级请保留该目录及挂载关系。
+- 源码目录的 `compose.yaml` 将 `./data` 挂载到容器 `/data`；Release 下载的 `compose.yaml` 使用 Docker 命名卷。两者均保存账号会话、管理配置、商品记录、收藏和主图缓存，升级请保留原有数据及挂载关系。
 - API 密钥保存在 `data/ai-config.json`，文件权限为 `600`；读取接口和任务导出不回显密钥。编辑接口时留空保留原密钥，改变服务地址须重新填写密钥。
 - `data/`、备份、`.env` 和构建归档已由忽略规则排除；源码不附带用户登录态、数据库或真实密钥。
 - 两个版本通过 Git 标签和 Release 保存：[v1.3.0](https://github.com/t3rhetto/goofish-catcher/tree/v1.3.0)、[v1.4.0](https://github.com/t3rhetto/goofish-catcher/tree/v1.4.0)。切换到相应标签后，可使用该版本完整源码和部署文件。
 
 ## 测试
+
+**2026-10-15 发布验证**：两版工作流均已完成镜像构建、离线自动化测试和版本一致性检查，运行记录见 [v1.3.0](https://github.com/t3rhetto/goofish-catcher/actions/runs/38706825958)、[v1.4.0](https://github.com/t3rhetto/goofish-catcher/actions/runs/38706886300)。
 
 构建镜像后执行离线自动化测试，使用独立临时数据：
 

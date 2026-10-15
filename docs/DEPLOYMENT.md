@@ -2,6 +2,28 @@
 
 本文对应 **v1.4.0**。当前构建与发布目标是 Linux AMD64；Docker 需能运行 AMD64 容器。Apple Silicon 等 ARM 主机如已配置 Docker 的 AMD64 模拟，可在以下命令前设置 `export DOCKER_DEFAULT_PLATFORM=linux/amd64`。
 
+## 使用已发布镜像安装（推荐）
+
+截至 **2026-10-15**，GHCR 软件包已公开，`1.3.0`、`1.4.0` 均已发布，`latest` 对应 `1.4.0`。两版发布工作流的镜像构建、离线测试和版本一致性检查均已通过：[v1.3.0 运行记录](https://github.com/t3rhetto/goofish-catcher/actions/runs/38706825958)、[v1.4.0 运行记录](https://github.com/t3rhetto/goofish-catcher/actions/runs/38706886300)。后续版本以对应 Release 的实际发布结果为准。
+
+新安装时，在一个新的目录下载现成 Compose 文件并启动，无需本地构建：
+
+```sh
+mkdir goofish-catcher-deploy
+cd goofish-catcher-deploy
+curl --fail --location --output compose.yaml \
+  https://github.com/t3rhetto/goofish-catcher/releases/download/v1.4.0/compose.yaml
+docker compose up -d
+docker compose ps
+```
+
+该文件已填入 `ghcr.io/t3rhetto/goofish-catcher:1.4.0`，使用 Docker 命名卷 `xianyu-data` 持久保存数据。**已有实例请继续使用原 Compose 文件及数据映射，不要直接用新安装文件覆盖**；保留安装目录和 Compose 项目名，避免连接到另一个空卷。
+
+| 版本 | 完整源码 | 已填镜像地址的部署文件 |
+| --- | --- | --- |
+| [v1.4.0（最新）](https://github.com/t3rhetto/goofish-catcher/releases/tag/v1.4.0) | [goofish-catcher-source-1.4.0.zip](https://github.com/t3rhetto/goofish-catcher/releases/download/v1.4.0/goofish-catcher-source-1.4.0.zip) | [compose.yaml](https://github.com/t3rhetto/goofish-catcher/releases/download/v1.4.0/compose.yaml) |
+| [v1.3.0](https://github.com/t3rhetto/goofish-catcher/releases/tag/v1.3.0) | [goofish-catcher-source-1.3.0.zip](https://github.com/t3rhetto/goofish-catcher/releases/download/v1.3.0/goofish-catcher-source-1.3.0.zip) | [compose.yaml](https://github.com/t3rhetto/goofish-catcher/releases/download/v1.3.0/compose.yaml) |
+
 ## 从源码安装
 
 ```sh
@@ -30,19 +52,19 @@ ssh -N -L 18818:127.0.0.1:8818 用户名@服务器地址
 
 ## 配置与持久数据
 
-| 项目 | 源码 Compose 默认值 |
-| --- | --- |
-| 本地构建镜像名 | `xianyu-watch:1.4.0` |
-| 数据映射 | `./data:/data` |
-| `DATA_DIR` | `/data` |
-| `TZ` | `Asia/Shanghai` |
-| 端口映射 | `127.0.0.1:8818:8080` |
-| 共享内存 | `256mb` |
-| 内存 / 内存加交换空间限制 | `900m` / `1400m` |
-| CPU 上限 | `1.5` |
-| 日志轮转 | 每文件 `10m`，保留 `3` 个文件 |
+| 项目 | 源码 Compose | Release Compose |
+| --- | --- | --- |
+| 镜像 | `xianyu-watch:1.4.0`（本地构建） | `ghcr.io/t3rhetto/goofish-catcher:1.4.0` |
+| 数据映射 | `./data:/data` | 命名卷 `xianyu-data:/data` |
+| `DATA_DIR` | `/data` | `/data` |
+| `TZ` | `Asia/Shanghai` | `Asia/Shanghai` |
+| 端口映射 | `127.0.0.1:8818:8080` | `127.0.0.1:8818:8080` |
+| 共享内存 | `256mb` | `256mb` |
+| 内存 / 内存加交换空间限制 | `900m` / `1400m` | `900m` / `1400m` |
+| CPU 上限 | `1.5` | `1.5` |
+| 日志轮转 | 每文件 `10m`，保留 `3` 个文件 | 每文件 `10m`，保留 `3` 个文件 |
 
-`data/watch.db` 保存管理设置、任务、商品、收藏和日志；`data/browser/`、`data/storage_state.json` 保存闲鱼浏览器登录资料；`data/ai-config.json` 保存 AI 接口和密钥。`data/item-images/` 保存商品详情主图。 管理密码与闲鱼账号是两套独立的登录信息。退出闲鱼或清除并换登会清理闲鱼会话，保留任务、管理密码和收藏。
+容器 `/data` 中的 `watch.db` 保存管理设置、任务、商品、收藏和日志；`browser/`、`storage_state.json` 保存闲鱼浏览器登录资料；`ai-config.json` 保存 AI 接口和密钥；`item-images/` 保存商品详情主图。源码部署对应宿主机 `data/`，镜像安装对应 Docker 命名卷。管理密码与闲鱼账号是两套独立的登录信息。退出闲鱼或清除并换登会清理闲鱼会话，保留任务、管理密码和收藏。
 
 ## 日常维护
 
@@ -84,17 +106,9 @@ docker compose logs --tail 50
 
 不要删除或替换 `data/`。更换版本的源码与部署配置不会自动搬迁数据；降级可能涉及数据库兼容问题，应使用升级前备份恢复对应版本。当前源码目录的版本可通过 `curl --fail http://127.0.0.1:8818/health` 检查。
 
-## 使用发布镜像
+## 镜像部署的模板与升级
 
-仓库提供 `.github/workflows/publish.yml` 和 `compose.release.yaml`；镜像在对应 Release 工作流成功后才可使用。先确认该版本镜像已发布、GHCR 软件包可公开拉取，再选择以下方式。
-
-直接下载 Release 附件中已填好镜像地址的 `compose.yaml`，放入新的安装目录后执行：
-
-```sh
-docker compose up -d
-```
-
-也可从源码使用模板：
+除了下载 Release 附件中的现成文件，也可从源码使用 `compose.release.yaml` 模板新建实例：
 
 ```sh
 XIANYU_IMAGE=ghcr.io/t3rhetto/goofish-catcher:1.4.0 \
