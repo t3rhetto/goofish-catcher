@@ -2,7 +2,7 @@
 
 通过独立网页管理闲鱼商品蹲守任务：扫码登录后，按关键词、价格、地区或 AI 筛选商品，记录新发现、降价与条件达标提醒，并保存收藏。
 
-本文对应 **v1.3.0**；最新版本为 [v1.4.0](https://github.com/t3rhetto/goofish-catcher/tree/v1.4.0)。 技术栈为 Python、FastAPI、Playwright 和 SQLite，使用 Docker Compose 部署。
+当前版本为 **v1.4.0**。 技术栈为 Python、FastAPI、Playwright 和 SQLite，使用 Docker Compose 部署。
 
 ## 功能
 
@@ -11,6 +11,7 @@
 - **AI 接口管理**：保存、测试和切换多套兼容 Chat Completions 的接口；展示评分、理由、风险与判断把握。
 - **商品记录**：首轮建立基线，后续变化产生提醒；同一变化去重。收藏保存独立快照，删除任务或普通记录后仍保留。
 - **管理界面**：运行状态、任务进度、日志清理、任务配置导入导出、深浅色主题。
+- **详情主图缓存**：后台读取商品详情主图，保存到本地供发现和收藏共用；成功后不重复读取，失败间隔 30 分钟重试，最多 3 次。
 
 AI 不会自动下单或联系卖家；分析依据是实际取得的商品资料，参考价不是成交价。接口失败时会提示错误，不会自动改为关键词模式。
 
@@ -19,12 +20,12 @@ AI 不会自动下单或联系卖家；分析依据是实际取得的商品资�
 需要 Git、Docker 与 Docker Compose v2；当前发布目标为 **Linux AMD64**。其他架构需提供 AMD64 模拟环境。以下在服务器终端执行：
 
 ```sh
-git clone --branch v1.3.0 https://github.com/t3rhetto/goofish-catcher.git
+git clone --branch v1.4.0 https://github.com/t3rhetto/goofish-catcher.git
 cd goofish-catcher
 docker compose build
 mkdir -p data
 docker run --rm --user root --entrypoint sh \
-  -v "$PWD/data:/data" xianyu-watch:1.3.0 \
+  -v "$PWD/data:/data" xianyu-watch:1.4.0 \
   -c 'chown pwuser:pwuser /data'
 docker compose up -d --build
 ```
@@ -57,7 +58,7 @@ ssh -N -L 18818:127.0.0.1:8818 用户名@服务器地址
 
 ## 数据与版本
 
-- `compose.yaml` 将当前目录 `data/` 挂载到容器 `/data`，保存账号会话、管理配置、商品记录、收藏。升级请保留该目录及挂载关系。
+- `compose.yaml` 将当前目录 `data/` 挂载到容器 `/data`，保存账号会话、管理配置、商品记录、收藏、主图缓存。升级请保留该目录及挂载关系。
 - API 密钥保存在 `data/ai-config.json`，文件权限为 `600`；读取接口和任务导出不回显密钥。编辑接口时留空保留原密钥，改变服务地址须重新填写密钥。
 - `data/`、备份、`.env` 和构建归档已由忽略规则排除；源码不附带用户登录态、数据库或真实密钥。
 - 两个版本通过 Git 标签和 Release 保存：[v1.3.0](https://github.com/t3rhetto/goofish-catcher/tree/v1.3.0)、[v1.4.0](https://github.com/t3rhetto/goofish-catcher/tree/v1.4.0)。切换到相应标签后，可使用该版本完整源码和部署文件。
@@ -68,10 +69,10 @@ ssh -N -L 18818:127.0.0.1:8818 用户名@服务器地址
 
 ```sh
 docker run --rm --network none --entrypoint python \
-  xianyu-watch:1.3.0 -m unittest discover -s tests -v
+  xianyu-watch:1.4.0 -m unittest discover -s tests -v
 ```
 
-源码提供的完整测试集包含 38 个测试方法，覆盖任务、账号、登录、AI、收藏与 API。两个 `smoke_*.py` 脚本需要访问实际闲鱼页面，不属于默认离线测试。测试方式和发布流程见 [发布说明](docs/RELEASING.md)。
+源码提供的完整测试集包含 44 个测试方法，覆盖任务、账号、登录、AI、收藏与 API，另含图片缓存和离线浏览器界面回归。两个 `smoke_*.py` 脚本需要访问实际闲鱼页面，不属于默认离线测试。测试方式和发布流程见 [发布说明](docs/RELEASING.md)。
 
 ## 文档与许可
 

@@ -9,6 +9,7 @@ import time
 from urllib.parse import urlencode
 from playwright.async_api import async_playwright
 from .core import extract_payload, price
+from .images import detail_image, image_url
 
 
 class BrowserIssue(Exception):
@@ -270,6 +271,58 @@ class FishBrowser:
             self.state = '搜索正常'
             await self.save_login()
             return list(all_items.values())
+
+    async def detail_main_image(self, item_id):
+        async with self.lock:
+            if self.login_active:
+                raise BrowserIssue('login', '登录期间暂缓获取主图')
+            await self.ensure()
+            page = await self.context.new_page()
+            done = asyncio.get_running_loop().create_future()
+            readers = set()
+            async def collect(response):
+                if '/h5/mtop.taobao.idle.pc.detail/' not in response.url:
+                    return
+                try:
+                    raw = await asyncio.wait_for(response.text(), timeout=5)
+                    payload = json.loads(raw[raw.find('{'):raw.rfind('}')+1])
+                    url = detail_image(payload, item_id)
+                    if url and not done.done():
+                        done.set_result(url)
+                except Exception:
+                    pass
+            def observe_detail(response):
+                task = asyncio.create_task(collect(response))
+                readers.add(task)
+                task.add_done_callback(readers.discard)
+            page.on('response', observe_detail)
+            try:
+                await page.goto('https://www.goofish.com/item?id='+str(item_id), wait_until='domcontentloaded', timeout=25000)
+                try:
+                    return await asyncio.wait_for(asyncio.shield(done), timeout=10)
+                except TimeoutError:
+                    # Fallback only to explicit product metadata, never the first
+                    # generic image which could belong to a seller or recommendation.
+                    candidates = await asyncio.wait_for(page.evaluate(r'''() => {
+                      const result=[];
+                      for (const el of document.querySelectorAll('script[type="application/ld+json"]')) {
+                        try {const obj=JSON.parse(el.textContent);const nodes=Array.isArray(obj)?obj:[obj,...(obj['@graph']||[])];
+                          for(const p of nodes) if(p['@type']==='Product') {const imgs=Array.isArray(p.image)?p.image:[p.image];result.push(...imgs.map(i=>typeof i==='string'?i:i?.url));}
+                        } catch {}
+                      }
+                      const og=document.querySelector('meta[property="og:image"]');if(og)result.push(og.content);
+                      return result.filter(Boolean);
+                    }'''),timeout=5)
+                    return next((image_url(v) for v in candidates if image_url(v)), '')
+            finally:
+                page.remove_listener('response', observe_detail)
+                for task in readers:
+                    task.cancel()
+                if readers:
+                    await asyncio.gather(*readers,return_exceptions=True)
+                if not done.done():
+                    done.cancel()
+                await asyncio.wait_for(page.close(), timeout=5)
 
     async def start_login(self):
         self.state = '正在等待浏览器空闲'

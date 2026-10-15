@@ -1,6 +1,6 @@
 services:
   xianyu-watch:
-    image: xianyu-watch:1.3.0
+    image: xianyu-watch:1.4.0
     build: .
     container_name: xianyu-watch
     restart: unless-stopped

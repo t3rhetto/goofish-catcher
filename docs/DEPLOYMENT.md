@@ -1,16 +1,16 @@
 # 部署与维护
 
-本文对应 **v1.3.0**。当前构建与发布目标是 Linux AMD64；Docker 需能运行 AMD64 容器。Apple Silicon 等 ARM 主机如已配置 Docker 的 AMD64 模拟，可在以下命令前设置 `export DOCKER_DEFAULT_PLATFORM=linux/amd64`。
+本文对应 **v1.4.0**。当前构建与发布目标是 Linux AMD64；Docker 需能运行 AMD64 容器。Apple Silicon 等 ARM 主机如已配置 Docker 的 AMD64 模拟，可在以下命令前设置 `export DOCKER_DEFAULT_PLATFORM=linux/amd64`。
 
 ## 从源码安装
 
 ```sh
-git clone --branch v1.3.0 https://github.com/t3rhetto/goofish-catcher.git
+git clone --branch v1.4.0 https://github.com/t3rhetto/goofish-catcher.git
 cd goofish-catcher
 docker compose build
 mkdir -p data
 docker run --rm --user root --entrypoint sh \
-  -v "$PWD/data:/data" xianyu-watch:1.3.0 \
+  -v "$PWD/data:/data" xianyu-watch:1.4.0 \
   -c 'chown pwuser:pwuser /data'
 docker compose up -d --build
 docker compose ps
@@ -32,7 +32,7 @@ ssh -N -L 18818:127.0.0.1:8818 用户名@服务器地址
 
 | 项目 | 源码 Compose 默认值 |
 | --- | --- |
-| 本地构建镜像名 | `xianyu-watch:1.3.0` |
+| 本地构建镜像名 | `xianyu-watch:1.4.0` |
 | 数据映射 | `./data:/data` |
 | `DATA_DIR` | `/data` |
 | `TZ` | `Asia/Shanghai` |
@@ -42,7 +42,7 @@ ssh -N -L 18818:127.0.0.1:8818 用户名@服务器地址
 | CPU 上限 | `1.5` |
 | 日志轮转 | 每文件 `10m`，保留 `3` 个文件 |
 
-`data/watch.db` 保存管理设置、任务、商品、收藏和日志；`data/browser/`、`data/storage_state.json` 保存闲鱼浏览器登录资料；`data/ai-config.json` 保存 AI 接口和密钥。 管理密码与闲鱼账号是两套独立的登录信息。退出闲鱼或清除并换登会清理闲鱼会话，保留任务、管理密码和收藏。
+`data/watch.db` 保存管理设置、任务、商品、收藏和日志；`data/browser/`、`data/storage_state.json` 保存闲鱼浏览器登录资料；`data/ai-config.json` 保存 AI 接口和密钥。`data/item-images/` 保存商品详情主图。 管理密码与闲鱼账号是两套独立的登录信息。退出闲鱼或清除并换登会清理闲鱼会话，保留任务、管理密码和收藏。
 
 ## 日常维护
 
@@ -97,7 +97,7 @@ docker compose up -d
 也可从源码使用模板：
 
 ```sh
-XIANYU_IMAGE=ghcr.io/t3rhetto/goofish-catcher:1.3.0 \
+XIANYU_IMAGE=ghcr.io/t3rhetto/goofish-catcher:1.4.0 \
   docker compose -f compose.release.yaml up -d
 ```
 

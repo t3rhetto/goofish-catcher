@@ -18,12 +18,14 @@ from .core import Store, matches
 from .browser import FishBrowser, BrowserIssue
 from .account import AccountService
 from .ai import AIService, AIConfig, AIProfile, AIIssue
+from .images import ImageCache
 
 ROOT = Path(os.environ.get('DATA_DIR', '/data'))
 store = Store(ROOT)
 browser = FishBrowser(ROOT)
 account = AccountService(store, browser)
 ai_service = AIService(store)
+image_cache = ImageCache(store, browser)
 sessions = {}
 attempts = {}
 queue = asyncio.Queue()
@@ -132,6 +134,9 @@ async def worker():
                 store.log('任务已修改，本次结果不写入；下轮按新配置检查', rule_id=rid)
                 continue
             notices = store.process(fresh, items)
+            for item in items:
+                if matches(item, fresh):
+                    image_cache.ensure(item['id'])
             if ai_stats:
                 store.log(f"AI 筛选完成：分析 {ai_stats['reviewed']} 件，推荐 {ai_stats['selected']} 件，调用 {ai_stats['calls']} 次，复用 {ai_stats['cached']} 件；{len(notices)} 条新提醒", rule_id=rid)
             else:
@@ -179,7 +184,7 @@ async def scheduler():
 @asynccontextmanager
 async def lifespan(app):
     service_tasks.clear()
-    service_tasks.extend([asyncio.create_task(worker()), asyncio.create_task(scheduler()), asyncio.create_task(account.run())])
+    service_tasks.extend([asyncio.create_task(worker()), asyncio.create_task(scheduler()), asyncio.create_task(account.run()), asyncio.create_task(image_cache.run(lambda: working is None and not browser.login_active and not browser.lock.locked() and not account.snapshot()['checking'] and store.get('auth_blocked') != '1'))])
     store.log('闲鱼蹲蹲已启动')
     yield
     for t in service_tasks:
@@ -210,7 +215,7 @@ async def guard(request: Request, call_next):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['Referrer-Policy'] = 'no-referrer'
-    if path.startswith('/api/'):
+    if path.startswith('/api/') and not path.startswith('/api/item-images/'):
         response.headers['Cache-Control'] = 'no-store'
     return response
 
@@ -222,7 +227,7 @@ async def browser_error(request, exc):
 
 @app.get('/health')
 def health():
-    return {'ok':True, 'version':'1.3.0'}
+    return {'ok':True, 'version':'1.4.0'}
 
 
 @app.get('/api/auth/status')
@@ -287,7 +292,7 @@ def state():
     return {'rules':rules, 'items':total, 'unread':unread, 'drops':drops,
         'paused':store.get('paused')=='1', 'auth_blocked':store.get('auth_blocked')=='1',
         'browser':browser.state, 'login_active':browser.login_active,
-        'working':working, 'queue':len(queued), 'account':account.snapshot(), 'version':'1.3.0'}
+        'working':working, 'queue':len(queued), 'account':account.snapshot(), 'version':'1.4.0'}
 
 
 @app.post('/api/rules')
@@ -350,14 +355,23 @@ def items(rule_id:int=0, offset:int=0, limit:int=100, ai_reviews:bool=False):
         rule = require_rule(r['rule_id'])
         if matches(item, rule) or (ai_reviews and rule['filter_mode']=='ai' and item.get('ai',{}).get('status')=='reviewed'):
             item['favorite'] = bool(store.query('SELECT 1 FROM favorites WHERE item_id=?', (item['id'],)))
-            result.append({**r, **item})
+            result.append({**r, **image_cache.decorate(item)})
     return result
 
 
 @app.get('/api/favorites')
 def favorites(offset:int=0, limit:int=200):
     rows = store.query('SELECT * FROM favorites ORDER BY saved_at DESC,item_id LIMIT ? OFFSET ?', (min(200,max(1,limit)),max(0,offset)))
-    return [{**json.loads(r['data']), 'rule_name':r['rule_name'], 'saved_at':r['saved_at'], 'favorite':True} for r in rows]
+    return [{**image_cache.decorate(json.loads(r['data'])), 'rule_name':r['rule_name'], 'saved_at':r['saved_at'], 'favorite':True} for r in rows]
+
+
+@app.get('/api/item-images/{item_id}')
+def cached_item_image(item_id:str):
+    cached=image_cache.cached(item_id)
+    if not cached:
+        raise HTTPException(404,'商品主图尚未缓存')
+    path,media=cached
+    return FileResponse(path,media_type=media,headers={'Cache-Control':'private, max-age=86400'})
 
 
 @app.post('/api/favorites/{item_id}')
@@ -411,6 +425,7 @@ async def fish_login():
         raise HTTPException(409, '正在切换账号，请稍候')
     if account.snapshot()['logged_in']:
         raise HTTPException(409, '闲鱼已登录。如需使用其他账号，请在设置中换登')
+    await image_cache.cancel_current()
     await account.cancel_verify()
     return browser.request_login()
 
@@ -466,6 +481,7 @@ async def cancel():
 
 
 async def stop_account_work():
+    await image_cache.cancel_current()
     task = scan_task
     if task and not task.done():
         task.cancel()
@@ -474,6 +490,7 @@ async def stop_account_work():
 
 @app.post('/api/fish/verify')
 async def verify_account():
+    await image_cache.cancel_current()
     return account.request_verify()
 
 

@@ -149,7 +149,7 @@ class AIService:
                 c['api_key'] = ''
             elif not config.api_key:
                 if old.get('api_key') and old['base_url'] != config.base_url:
-                    raise AIIssue('更换接口地址时请重新输入密钥，或勾选清除旧密钥')
+                    raise AIIssue('更换接口地址时请重新输入新接口的密钥')
                 c['api_key'] = old.get('api_key','')
             c['id'] = pid or uuid.uuid4().hex
             c['revision'] = str(time.time_ns())

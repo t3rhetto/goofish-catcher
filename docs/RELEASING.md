@@ -9,9 +9,9 @@
 ```sh
 docker compose build
 docker run --rm --network none --entrypoint python \
-  xianyu-watch:1.3.0 -m unittest discover -s tests -v
+  xianyu-watch:1.4.0 -m unittest discover -s tests -v
 docker run --rm --network none --entrypoint python \
-  xianyu-watch:1.3.0 -c 'from app.main import health; assert health()["version"] == "1.3.0"'
+  xianyu-watch:1.4.0 -c 'from app.main import health; assert health()["version"] == "1.4.0"'
 ```
 
 测试使用临时数据，不挂载生产 `data/`。v1.3.0 有 38 个测试方法；v1.4.0 有 44 个，其中新增主图缓存和离线浏览器界面回归。两个 `smoke_*.py` 脚本访问真实闲鱼页面，默认离线测试不会运行它们；需要单独准备浏览器显示环境和网络。
@@ -23,9 +23,9 @@ docker run --rm --network none --entrypoint python \
 标签必须指向相应版本的代码，且 `/health` 返回版本与标签一致。以本版本为例：
 
 ```sh
-git tag -a v1.3.0 -m "闲鱼蹲蹲 v1.3.0"
-git push origin v1.3.0
-gh release create v1.3.0 --title "闲鱼蹲蹲 v1.3.0" --notes-file CHANGELOG.md
+git tag -a v1.4.0 -m "闲鱼蹲蹲 v1.4.0"
+git push origin v1.4.0
+gh release create v1.4.0 --title "闲鱼蹲蹲 v1.4.0" --notes-file CHANGELOG.md
 ```
 
 上述示例使用 `CHANGELOG.md` 作为版本说明，也可在 GitHub 的 Releases 页面填写该版本的专属说明并发布。标签或 Release 已存在时，先核对现有内容，避免重复创建或覆盖。补发旧版时保留 v1.4.0 为最新正式版。
@@ -45,7 +45,7 @@ gh release create v1.3.0 --title "闲鱼蹲蹲 v1.3.0" --notes-file CHANGELOG.md
 手动补发示例：
 
 ```sh
-gh workflow run publish.yml --ref main -f release_tag=v1.3.0
+gh workflow run publish.yml --ref main -f release_tag=v1.4.0
 ```
 
 GitHub Actions 页面可查看运行结果。发布失败时先处理失败步骤，再重跑；镜像和附件的可用状态以实际成功结果为准。
@@ -53,7 +53,7 @@ GitHub Actions 页面可查看运行结果。发布失败时先处理失败步�
 ## 发布后核验
 
 ```sh
-docker pull ghcr.io/t3rhetto/goofish-catcher:1.3.0
+docker pull ghcr.io/t3rhetto/goofish-catcher:1.4.0
 ```
 
 在独立安装目录下载该 Release 的 `compose.yaml`，执行 `docker compose up -d`，检查健康状态、首次密码设置和登录界面。对旧版本补发后，应确认 `latest` 仍指向最新正式版。公开说明应区分离线测试通过与真实闲鱼扫码、搜索验证结果。
