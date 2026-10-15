@@ -1,0 +1,6 @@
+data
+backups
+*.tar*
+.git
+__pycache__
+*.pyc

@@ -1,0 +1,12 @@
+data/
+backups/
+dist/
+qa/
+.env
+*.pending
+__pycache__/
+*.pyc
+*.tar
+*.tar.gz
+*.zip
+.DS_Store

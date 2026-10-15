@@ -1,0 +1,29 @@
+# For a NEW installation using the published image. Existing deployments retain their data mapping.
+services:
+  xianyu-watch:
+    image: ${XIANYU_IMAGE:?Set XIANYU_IMAGE to the published image}
+    platform: linux/amd64
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:8818:8080"
+    volumes:
+      - xianyu-data:/data
+    environment:
+      - DATA_DIR=/data
+      - TZ=Asia/Shanghai
+    shm_size: 256mb
+    mem_limit: 900m
+    memswap_limit: 1400m
+    cpus: 1.5
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  xianyu-data:

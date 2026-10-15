@@ -1,0 +1,74 @@
+name: Publish Docker image and release files
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag, for example v1.4.0'
+        required: true
+        type: string
+permissions:
+  contents: write
+  packages: write
+concurrency:
+  group: publish-container
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate release version
+        id: version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use a stable vX.Y.Z release tag'; exit 1; }
+          printf 'tag=%s\nversion=%s\nimage=ghcr.io/%s\n' "$RELEASE_TAG" "${RELEASE_TAG#v}" "${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.version.outputs.tag }}
+          persist-credentials: false
+      - name: Build and verify
+        env:
+          IMAGE: ${{ steps.version.outputs.image }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker build --platform linux/amd64 --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" --label "org.opencontainers.image.version=$VERSION" -t "$IMAGE:$VERSION" .
+          docker run --rm --network none --entrypoint python "$IMAGE:$VERSION" -m unittest discover -s tests -v
+          docker run --rm --network none --entrypoint python "$IMAGE:$VERSION" -c 'import sys; from app.main import health; assert health()["version"] == sys.argv[1], "Tag and application version differ"' "$VERSION"
+      - name: Publish image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.version.outputs.image }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE:$VERSION"
+          LATEST_TAG=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          if [ "$LATEST_TAG" = "$RELEASE_TAG" ]; then
+            docker tag "$IMAGE:$VERSION" "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+          fi
+      - name: Attach source and ready-to-use Compose file
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.version.outputs.image }}
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          mkdir -p dist
+          git archive --format=zip --prefix="xianyu-watch-$VERSION/" HEAD > "dist/xianyu-watch-source-$VERSION.zip"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          image=os.environ['IMAGE']+':'+os.environ['VERSION']
+          template=Path('compose.release.yaml').read_text()
+          Path('dist/compose.yaml').write_text(template.replace('${XIANYU_IMAGE:?Set XIANYU_IMAGE to the published image}',image))
+          Path('dist/Docker-pull.txt').write_text('docker pull '+image+'\n\nStart: docker compose up -d\nUpdate: docker compose pull && docker compose up -d\n')
+          PY
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          gh release upload "$RELEASE_TAG" dist/* --clobber
+          printf '### Docker image\n`docker pull %s:%s`\n\nCompose download: https://github.com/%s/releases/download/%s/compose.yaml\n' "$IMAGE" "$VERSION" "$GITHUB_REPOSITORY" "$RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
